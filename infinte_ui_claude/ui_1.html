@@ -11,6 +11,9 @@
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js"></script>
   <script type="text/babel">
     const { useState, useEffect } = React;
 
@@ -19,24 +22,40 @@
       const [showUploadModal, setShowUploadModal] = useState(false);
       const [showLinkModal, setShowLinkModal] = useState(false);
 
+      // Firebase config with provided databaseURL
+      const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+        databaseURL: "https://perp-e590d-default-rtdb.firebaseio.com",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_PROJECT_ID.appspot.com",
+        messagingSenderId: "YOUR_SENDER_ID",
+        appId: "YOUR_APP_ID"
+      };
+
+      const app = firebase.initializeApp(firebaseConfig);
+      const database = firebase.database(app);
+      const storage = firebase.storage(app);
+
       useEffect(() => {
-        const storedImage = localStorage.getItem('linkedImage');
-        if (storedImage) {
-          setImage(storedImage);
-        }
+        const imageRef = database.ref('imageUrl');
+        imageRef.on('value', (snapshot) => {
+          const url = snapshot.val();
+          if (url) setImage(url);
+        });
+
+        return () => imageRef.off();
       }, []);
 
       const handleUpload = (e) => {
         const file = e.target.files[0];
         if (file) {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const dataUrl = reader.result;
-            setImage(dataUrl);
-            localStorage.setItem('linkedImage', dataUrl);
-            // In a full app, upload to backend/database for real-time sync with other users.
-          };
-          reader.readAsDataURL(file);
+          const storageRef = storage.ref('images/linkedImage.jpg');
+          storageRef.put(file).then(() => {
+            storageRef.getDownloadURL().then((url) => {
+              database.ref('imageUrl').set(url);
+            });
+          });
         }
         setShowUploadModal(false);
       };
@@ -56,7 +75,13 @@
           <div className="w-full max-w-4xl flex flex-col md:flex-row gap-6">
             <div className="flex-1 bg-white rounded-lg shadow p-6">
               <h2 className="text-xl font-semibold mb-4">Linked Image</h2>
-              <img src="/public/image.jpg" alt="Linked device" className="w-full h-auto rounded" onError={(e) => e.target.src = 'https://via.placeholder.com/400?text=Upload+Image'} />
+              {image ? (
+                <img src={image} alt="Linked device" className="w-full h-auto rounded" />
+              ) : (
+                <div className="w-full h-64 bg-gray-200 flex items-center justify-center rounded">
+                  Loading Image...
+                </div>
+              )}
               <button 
                 onClick={() => setShowLinkModal(true)}
                 className="mt-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
